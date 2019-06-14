@@ -33,18 +33,21 @@ link_directories(${DBus_LIBRARY_DIRS})
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
+find_package(Threads REQUIRED)
+
 ##############
 # Tests
 enable_testing()
 
+cmake_policy(SET CMP0023 NEW)
 function(cxx_test test_name)
   add_executable(${test_name} "test/${test_name}.cpp")
-  target_link_libraries(${test_name} ${Boost_LIBRARIES})
-  target_link_libraries(${test_name} ${DBus_LIBRARIES})
-  target_link_libraries(${test_name} ${GTEST_BOTH_LIBRARIES})
-  target_link_libraries(${test_name} -pthread)
+  target_link_libraries(${test_name} PRIVATE ${Boost_LIBRARIES})
+  target_link_libraries(${test_name} PRIVATE ${DBus_LIBRARIES})
+  target_link_libraries(${test_name} PRIVATE ${GTEST_BOTH_LIBRARIES})
+  target_link_libraries(${test_name} PRIVATE Threads::Threads)
   add_test(${test_name} ${test_name} "--gtest_output=xml:${test_name}.xml")
 endfunction(cxx_test)
 
 cxx_test(avahi)
-cxx_test(message)
+# cxx_test(message)

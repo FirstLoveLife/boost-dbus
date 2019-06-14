@@ -6,65 +6,49 @@
 #ifndef DBUS_QUEUE_HPP
 #define DBUS_QUEUE_HPP
 
-#include <deque>
 #include <boost/asio.hpp>
 #include <boost/asio/detail/mutex.hpp>
+#include <deque>
 
 #include <dbus/functional.hpp>
-
 
 namespace dbus {
 namespace detail {
 
-template<typename Message>
-class queue
-{
+template <typename Message> class queue {
 public:
   typedef ::boost::asio::detail::mutex mutex_type;
   typedef Message message_type;
-  typedef function<
-    void(boost::system::error_code, Message)> handler_type;
+  typedef function<void(boost::system::error_code, Message)> handler_type;
 
 private:
-  boost::asio::io_service& io;
+  boost::asio::io_service &io;
   mutex_type mutex;
   std::deque<message_type> messages;
   std::deque<handler_type> handlers;
 
 public:
-
-  queue(boost::asio::io_service& io_service)
-    : io(io_service)
-  {}
+  queue(boost::asio::io_service &io_service) : io(io_service) {}
 
 private:
-  class closure
-  {
+  class closure {
     handler_type handler_;
     message_type message_;
     boost::system::error_code error_;
 
   public:
     void operator()() { handler_(error_, message_); }
-    closure(
-	BOOST_ASIO_MOVE_ARG(handler_type) h,
-	Message m,
-        boost::system::error_code e = boost::system::error_code())
-      : handler_(h),
-        message_(m),
-        error_(e)
-    {}
+    closure(BOOST_ASIO_MOVE_ARG(handler_type) h, Message m,
+            boost::system::error_code e = boost::system::error_code())
+        : handler_(h), message_(m), error_(e) {}
   };
 
 public:
-
-  void push(message_type m)
-  {
+  void push(message_type m) {
     mutex_type::scoped_lock lock(mutex);
-    if(handlers.empty())
+    if (handlers.empty())
       messages.push_back(m);
-    else
-    {
+    else {
       handler_type h = handlers.front();
       handlers.pop_front();
 
@@ -74,20 +58,31 @@ public:
     }
   }
 
-  template<typename MessageHandler>
+  template <typename MessageHandler>
   inline BOOST_ASIO_INITFN_RESULT_TYPE(MessageHandler,
-      void(boost::system::error_code, message_type))
-  async_pop(BOOST_ASIO_MOVE_ARG(MessageHandler) h)
-  {
+                                       void(boost::system::error_code,
+                                            message_type))
+      async_pop(BOOST_ASIO_MOVE_ARG(MessageHandler) h) {
+
+#if BOOST_VERSION >= 106700
+    typedef ::boost::asio::async_completion<
+        MessageHandler, void(boost::system::error_code, message_type)>
+        init_type;
+#else
     typedef ::boost::asio::detail::async_result_init<
-      MessageHandler, void(boost::system::error_code, message_type)> init_type;
+        MessageHandler, void(boost::system::error_code, message_type)>
+        init_type;
+#endif
 
     mutex_type::scoped_lock lock(mutex);
-    if(messages.empty())
-    {
-      init_type init(BOOST_ASIO_MOVE_CAST(MessageHandler)(h));
+    if (messages.empty()) {
+      init_type init(h);
 
+#if BOOST_VERSION >= 106700
+      handlers.push_back(init.completion_handler);
+#else
       handlers.push_back(init.handler);
+#endif
 
       lock.unlock();
 
@@ -99,15 +94,19 @@ public:
 
       lock.unlock();
 
-      init_type init(BOOST_ASIO_MOVE_CAST(MessageHandler)(h));
+      init_type init(h);
 
-      io.post(closure(BOOST_ASIO_MOVE_CAST(handler_type)(init.handler), m));
+      io.post(closure(
+#if BOOST_VERSION >= 106700
+          BOOST_ASIO_MOVE_CAST(handler_type)(init.completion_handler), m));
+#else
+          BOOST_ASIO_MOVE_CAST(handler_type)(init.handler), m));
+#endif
 
       return init.result.get();
     }
   }
 };
-
 
 } // namespace detail
 } // namespace dbus
