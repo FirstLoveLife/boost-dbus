@@ -35,6 +35,12 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 find_package(Threads REQUIRED)
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  message("Use clang")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
+endif()
+
 ##############
 # Tests
 enable_testing()
@@ -50,4 +56,11 @@ function(cxx_test test_name)
 endfunction(cxx_test)
 
 cxx_test(avahi)
-# cxx_test(message)
+cxx_test(message)
+# cxx_test(demo)
+
+add_executable(demo "test/demo.cpp")
+target_link_libraries(demo PRIVATE ${Boost_LIBRARIES})
+target_link_libraries(demo PRIVATE ${DBus_LIBRARIES})
+target_link_libraries(demo PRIVATE Threads::Threads)
+# target_link_libraries(demo PRIVATE ${GTEST_BOTH_LIBRARIES})
